@@ -21,6 +21,8 @@ from tracktor.oracle_tracker import OracleTracker
 from tracktor.tracker import Tracker
 from tracktor.reid.resnet import resnet50
 from tracktor.utils import interpolate, plot_sequence, get_mot_accum, evaluate_mot_accums
+from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 
 ex = Experiment()
 
@@ -56,7 +58,23 @@ def main(tracktor, reid, _config, _log, _run):
     # object detection
     _log.info("Initializing object detector.")
 
-    obj_detect = FRCNN_FPN(num_classes=2)
+    #obj_detect = FRCNN_FPN(num_classes=2)
+    num_classes = 2
+    obj_detect = torchvision.models.detection.maskrcnn_resnet50_fpn(pretrained=True)
+
+    # get the number of input features for the classifier
+    in_features = obj_detect.roi_heads.box_predictor.cls_score.in_features
+    # replace the pre-trained head with a new one
+    obj_detect.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
+
+    # now get the number of input features for the mask classifier
+    in_features_mask = obj_detect.roi_heads.mask_predictor.conv5_mask.in_channels
+    hidden_layer = 256
+    # and replace the mask predictor with a new one
+    obj_detect.roi_heads.mask_predictor = MaskRCNNPredictor(in_features_mask,
+                                                       hidden_layer,
+                                                       num_classes)
+
     obj_detect.load_state_dict(torch.load(_config['tracktor']['obj_detect_model'],
                                map_location=lambda storage, loc: storage))
 
