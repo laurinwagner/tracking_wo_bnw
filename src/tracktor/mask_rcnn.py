@@ -70,6 +70,10 @@ class Mask_RCNN(MaskRCNN):
 
         mask_features = self.roi_heads.mask_roi_pool(features, proposals, images.image_sizes)
         pred_masks = self.roi_heads.mask_predictor(mask_features)
+        mask_sigmoid =[]
+        for mask in pred_masks:
+            mask_sigmoid.append(F.sigmoid(mask))
+        
         # score_thresh = self.roi_heads.score_thresh
         # nms_thresh = self.roi_heads.nms_thresh
 
@@ -92,7 +96,7 @@ class Mask_RCNN(MaskRCNN):
         pred_boxes = resize_boxes(
             pred_boxes, images.image_sizes[0], original_image_sizes[0])
         pred_scores = pred_scores[:, 1:].squeeze(dim=1).detach()
-        return pred_boxes, pred_scores, pred_masks
+        return pred_boxes, pred_scores, mask_sigmoid
 
     def load_image(self, img):
         pass
