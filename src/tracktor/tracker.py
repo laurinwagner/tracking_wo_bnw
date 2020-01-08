@@ -39,6 +39,7 @@ class Tracker:
 
 		self.tracks = []
 		self.inactive_tracks = []
+		self.masks = []
 		self.track_num = 0
 		self.im_index = 0
 		self.results = {}
@@ -74,15 +75,13 @@ class Tracker:
 		self.track_num += num_new
 
 	def regress_tracks(self, blob):
+		print('regress was called')
 		"""Regress the position of the tracks and also checks their scores."""
 		pos = self.get_pos()
 
 		# regress
 		boxes, scores, masks = self.obj_detect.predict_boxes(blob['img'], pos)
 		pos = clip_boxes_to_image(boxes, blob['img'].shape[-2:])
-		print(str(masks))
-		print(len(boxes))
-		print(len(masks))
 		
 		s = []
 		for i in range(len(self.tracks) - 1, -1, -1):
@@ -265,6 +264,7 @@ class Tracker:
 			dets = blob['dets'].squeeze(dim=0)
 			if dets.nelement() > 0:
 				boxes, scores, masks = self.obj_detect.predict_boxes(blob['img'], dets)
+				self.masks.append(masks)
 			else:
 				boxes = scores = torch.zeros(0).cuda()
 		else:
@@ -378,6 +378,9 @@ class Tracker:
 
 	def get_results(self):
 		return self.results
+	
+	def get_masks(self):
+		return self.masks
 
 
 class Track(object):

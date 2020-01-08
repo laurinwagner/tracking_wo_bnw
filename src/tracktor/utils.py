@@ -80,7 +80,7 @@ def bbox_overlaps(boxes, query_boxes):
     return out_fn(overlaps)
 
 
-def plot_sequence(tracks, db, output_dir):
+def plot_sequence(tracks, masks, mask_thresh, db, output_dir):
     """Plots a whole sequence
 
     Args:
@@ -119,6 +119,8 @@ def plot_sequence(tracks, db, output_dir):
 
         for j, t in tracks.items():
             if i in t.keys():
+                print('t_i: ' +str(t[i]))
+                print('styles[' + j + ']' + str(styles[j]))
                 t_i = t[i]
                 ax.add_patch(
                     plt.Rectangle(
