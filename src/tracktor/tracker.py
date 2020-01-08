@@ -78,9 +78,12 @@ class Tracker:
 		pos = self.get_pos()
 
 		# regress
-		boxes, scores = self.obj_detect.predict_boxes(blob['img'], pos)
+		boxes, scores, masks = self.obj_detect.predict_boxes(blob['img'], pos)
 		pos = clip_boxes_to_image(boxes, blob['img'].shape[-2:])
-
+		print(str(masks))
+		print(len(boxes))
+		print(len(masks))
+		
 		s = []
 		for i in range(len(self.tracks) - 1, -1, -1):
 			t = self.tracks[i]
