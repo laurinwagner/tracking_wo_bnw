@@ -3,7 +3,7 @@ import torch.nn.functional as F
 
 from torchvision.models.detection import MaskRCNN
 from torchvision.models.detection.backbone_utils import resnet_fpn_backbone
-
+from .utils import py_cpu_softnms
 
 class Mask_RCNN(MaskRCNN):
 
@@ -19,7 +19,24 @@ class Mask_RCNN(MaskRCNN):
 
         return detections['boxes'].detach(), detections['scores'].detach()
 
+
+    def predict_masks(self, images):
+        self.eval()
+        with torch.no_grad():
+            prediction = self([img.to(device)])
+        #get boxes
+        #dets=prediction[0]['boxes'].cpu().numpy()
+        #get scores
+        #sc=prediction[0]['scores'].cpu().numpy()
+        #perform NMS with Method specified in py_cpus_softnms to select boxes
+        nms_index=py_cpu_softnms(dets,sc,Nt=0.3, thresh=thresh, method=3)
+        predicted_masks=[]
+        for i in nms_index:
+            predicted_masks.append((prediction[0]['masks'][i, 0].cpu().numpy()>mask_thresh))
+
+
     def predict_boxes(self, images, boxes):
+
         device = list(self.parameters())[0].device
         images = images.to(device)
         boxes = boxes.to(device)
@@ -35,6 +52,9 @@ class Mask_RCNN(MaskRCNN):
 
         # proposals, proposal_losses = self.rpn(images, features, targets)
         from torchvision.models.detection.transform import resize_boxes
+
+        
+
         boxes = resize_boxes(
             boxes, original_image_sizes[0], images.image_sizes[0])
         proposals = [boxes]
@@ -48,6 +68,8 @@ class Mask_RCNN(MaskRCNN):
         pred_boxes = self.roi_heads.box_coder.decode(box_regression, proposals)
         pred_scores = F.softmax(class_logits, -1)
 
+        mask_features = self.roi_heads.mask_roi_pool(features, proposals, images.image_sizes)
+        pred_masks = self.roi_heads.mask_predictor(mask_features)
         # score_thresh = self.roi_heads.score_thresh
         # nms_thresh = self.roi_heads.nms_thresh
 
@@ -70,7 +92,7 @@ class Mask_RCNN(MaskRCNN):
         pred_boxes = resize_boxes(
             pred_boxes, images.image_sizes[0], original_image_sizes[0])
         pred_scores = pred_scores[:, 1:].squeeze(dim=1).detach()
-        return pred_boxes, pred_scores
+        return pred_boxes, pred_scores, pred_masks
 
     def load_image(self, img):
         pass
