@@ -20,19 +20,19 @@ class Mask_RCNN(MaskRCNN):
         return detections['boxes'].detach(), detections['scores'].detach()
 
 
-    def predict_masks(self, images):
-        self.eval()
-        with torch.no_grad():
-            prediction = self([img.to(device)])
-        #get boxes
-        #dets=prediction[0]['boxes'].cpu().numpy()
-        #get scores
-        #sc=prediction[0]['scores'].cpu().numpy()
-        #perform NMS with Method specified in py_cpus_softnms to select boxes
-        nms_index=py_cpu_softnms(dets,sc,Nt=0.3, thresh=thresh, method=3)
-        predicted_masks=[]
-        for i in nms_index:
-            predicted_masks.append((prediction[0]['masks'][i, 0].cpu().numpy()>mask_thresh))
+    # def predict_masks(self, images):
+    #     self.eval()
+    #     with torch.no_grad():
+    #         prediction = self([img.to(device)])
+    #     #get boxes
+    #     #dets=prediction[0]['boxes'].cpu().numpy()
+    #     #get scores
+    #     #sc=prediction[0]['scores'].cpu().numpy()
+    #     #perform NMS with Method specified in py_cpus_softnms to select boxes
+    #     nms_index=py_cpu_softnms(dets,sc,Nt=0.3, thresh=thresh, method=3)
+    #     predicted_masks=[]
+    #     for i in nms_index:
+    #         predicted_masks.append((prediction[0]['masks'][i, 0].cpu().numpy()>mask_thresh))
 
 
     def predict_boxes(self, images, boxes):
@@ -72,7 +72,7 @@ class Mask_RCNN(MaskRCNN):
         pred_masks = self.roi_heads.mask_predictor(mask_features)
         mask_sigmoid =[]
         for mask in pred_masks:
-            mask_sigmoid.append(F.sigmoid(mask))
+            mask_sigmoid.append(torch.sigmoid(mask))
         
         # score_thresh = self.roi_heads.score_thresh
         # nms_thresh = self.roi_heads.nms_thresh
