@@ -120,7 +120,7 @@ def plot_sequence(tracks, masks, mask_thresh, db, output_dir):
         for j, t in tracks.items():
             if i in t.keys():
                 print('t_i: ' +str(t[i]))
-                print('styles[' + j + ']' + str(styles[j]))
+                print('styles[' + str(j) + ']' + str(styles[j]))
                 t_i = t[i]
                 ax.add_patch(
                     plt.Rectangle(
