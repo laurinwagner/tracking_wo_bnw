@@ -80,7 +80,7 @@ def bbox_overlaps(boxes, query_boxes):
     return out_fn(overlaps)
 
 
-def plot_sequence(tracks, masks, mask_thresh, db, output_dir):
+def plot_sequence(tracks, masks, mask_thresh, db, index, output_dir, plot_masks = True):
     """Plots a whole sequence
 
     Args:
@@ -99,46 +99,49 @@ def plot_sequence(tracks, masks, mask_thresh, db, output_dir):
     loop_cy_iter = cyl()
     styles = defaultdict(lambda: next(loop_cy_iter))
 
-    for i, v in enumerate(db):
-        im_path = v['img_path']
-        im_name = osp.basename(im_path)
-        im_output = osp.join(output_dir, im_name)
-        im = cv2.imread(im_path)
-        im = im[:, :, (2, 1, 0)]
+    #for i, v in enumerate(db):
+    v = db[index]
+    im_path = v['img_path']
+    im_name = osp.basename(im_path)
+    im_output = osp.join(output_dir, im_name)
+    im = cv2.imread(im_path)
+    im = im[:, :, (2, 1, 0)]
 
-        sizes = np.shape(im)
-        height = float(sizes[0])
-        width = float(sizes[1])
+    sizes = np.shape(im)
+    height = float(sizes[0])
+    width = float(sizes[1])
 
-        fig = plt.figure()
-        fig.set_size_inches(width / 100, height / 100)
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(im)
+    fig = plt.figure()
+    fig.set_size_inches(width / 100, height / 100)
+    ax = plt.Axes(fig, [0., 0., 1., 1.])
+    ax.set_axis_off()
+    fig.add_axes(ax)
+    ax.imshow(im)
 
-        for j, t in tracks.items():
-            if i in t.keys():
-                print('t_i: ' +str(t[i]))
-                print('styles[' + str(j) + ']' + str(styles[j]))
-                t_i = t[i]
-                ax.add_patch(
-                    plt.Rectangle(
-                        (t_i[0], t_i[1]),
-                        t_i[2] - t_i[0],
-                        t_i[3] - t_i[1],
-                        fill=False,
-                        linewidth=1.0, **styles[j]
-                    ))
+    for j, t in tracks.items(): #[track_id][frame]
+        print('t:' + str(t))
+        print('t.keys: ' + str(t.keys))
+        if index in t.keys():
+            print('t_i: ' +str(t[index]))
+            print('styles[' + str(j) + ']' + str(styles[j]))
+            t_i = t[index]
+            ax.add_patch(
+                plt.Rectangle(
+                    (t_i[0], t_i[1]),
+                    t_i[2] - t_i[0],
+                    t_i[3] - t_i[1],
+                    fill=False,
+                    linewidth=1.0, **styles[j]
+                ))
 
-                ax.annotate(j, (t_i[0] + (t_i[2] - t_i[0]) / 2.0, t_i[1] + (t_i[3] - t_i[1]) / 2.0),
-                            color=styles[j]['ec'], weight='bold', fontsize=6, ha='center', va='center')
+            ax.annotate(j, (t_i[0] + (t_i[2] - t_i[0]) / 2.0, t_i[1] + (t_i[3] - t_i[1]) / 2.0),
+                        color=styles[j]['ec'], weight='bold', fontsize=6, ha='center', va='center')
 
-        plt.axis('off')
-        # plt.tight_layout()
-        plt.draw()
-        plt.savefig(im_output, dpi=100)
-        plt.close()
+    plt.axis('off')
+    # plt.tight_layout()
+    plt.draw()
+    plt.savefig(im_output, dpi=100)
+    plt.close()
 
 
 def plot_tracks(blobs, tracks, gt_tracks=None, output_dir=None, name=None):

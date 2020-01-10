@@ -264,7 +264,7 @@ class Tracker:
 			dets = blob['dets'].squeeze(dim=0)
 			if dets.nelement() > 0:
 				boxes, scores, masks = self.obj_detect.predict_boxes(blob['img'], dets)
-				#self.masks.append(masks)
+				self.masks = masks
 			else:
 				boxes = scores = torch.zeros(0).cuda()
 		else:
