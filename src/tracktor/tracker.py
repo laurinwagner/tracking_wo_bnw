@@ -1,5 +1,3 @@
-%%writefile src/tracktor/tracker.py
-
 from collections import deque
 
 import csv
