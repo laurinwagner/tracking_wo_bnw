@@ -277,25 +277,6 @@ class Tracker:
 			intersect = iou(box.cpu(),gt[key][0].cpu())
 			max_iou=max(max_iou,intersect)
 		return max_iou
-	def printdetInfo(self,boxes, scores, mask_boxes,mask_scores, gt):
-		import random
-		#print(gt)
-		mask_box_sizes = [self.getSize(mask_box) for mask_box in mask_boxes]
-		box_sizes = [self.getSize(box) for box in boxes]
-		scores, mask_scores = scores.cpu().numpy(), mask_scores.cpu().numpy()
-		for i,sizes in enumerate(zip(box_sizes,mask_box_sizes)):
-			#if(scores[i]>0.5 and mask_scores[i]<0.5 and self.get_iou(boxes[i],gt)>0.5 and sizes[0]>20000):
-			if(sizes[0]<20000 and self.get_iou(boxes[i],gt)<0.5):
-				self.box_comp.append(scores[i])
-			if(sizes[1]<20000 and self.get_iou(mask_boxes[i],gt)<0.5):
-				self.mask_comp.append(mask_scores[i])
-
-			#randomly sampling boxes
-			#if(random.randint(i,20)==i):
-				#print('box added, boxsize, mask_box_size: ' + str([sizes[0],sizes[1]]))
-
-				#self.box_size.append((sizes[1]+sizes[0])/2)
-				#self.score_diff.append(mask_scores[i]-scores[i])
 
 	def step(self, blob):
 		"""This function should be called every timestep to perform tracking with a blob
@@ -319,7 +300,7 @@ class Tracker:
 				    mask_boxes, mask_scores, masks = self.mask_model.predict_boxes(blob['img'], dets)
 				    mask_box_sizes = [self.getSize(mask_box) for mask_box in mask_boxes]
 				    self.masks = masks
-				    self.printdetInfo(boxes,scores,mask_boxes,mask_scores,blob['gt'])
+
 			else:
 				boxes = scores = torch.zeros(0).cuda()
 				if(self.use_masks):
