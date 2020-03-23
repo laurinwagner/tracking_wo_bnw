@@ -135,7 +135,7 @@ def plot_sequence(tracks, masks, db, index, output_dir, alpha = 0.6, mask_thresh
           color = styles[j]['ec']
 
           for mask in masks:
-            if(iou(mask[0], t_i))>0.8:
+            if(iou(mask[0], t_i))>0.5:
               tempmask = np.zeros([height,width,3])
               tempmask[:,:,0] = mask.cpu().numpy()*color[0]
               tempmask[:,:,1] = mask.cpu().numpy()*color[1]
