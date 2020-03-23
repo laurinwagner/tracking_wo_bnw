@@ -90,7 +90,7 @@ class Tracker:
 		# regress
 		boxes, scores = self.fast_model.predict_boxes(blob['img'], pos)
 		pos_fast = clip_boxes_to_image(boxes, blob['img'].shape[-2:])
-		box_sizes = [self.getSize(box) for box in boxes]
+		#box_sizes = [self.getSize(box) for box in boxes]
 		if(self.use_masks):
 			mask_boxes, mask_scores, masks = self.mask_model.predict_boxes(blob['img'], pos)
 			pos_mask = clip_boxes_to_image(mask_boxes, blob['img'].shape[-2:])
@@ -368,9 +368,6 @@ class Tracker:
 		##################
 		# Predict tracks #
 		##################
-
-		num_tracks = 0
-		nms_inp_reg = torch.zeros(0).cuda()
 		if len(self.tracks):
 			# align
 			if self.do_align:
