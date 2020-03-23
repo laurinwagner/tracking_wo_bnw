@@ -91,7 +91,7 @@ class Mask_RCNN(MaskRCNN):
 
         # detections = detections[0]
         # return detections['boxes'].detach().cpu(), detections['scores'].detach().cpu()
-
+        
         pred_boxes = pred_boxes[:, 1:].squeeze(dim=1).detach()
         pred_boxes = resize_boxes(
             pred_boxes, images.image_sizes[0], original_image_sizes[0])

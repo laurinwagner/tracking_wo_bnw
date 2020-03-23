@@ -108,7 +108,7 @@ def plot_sequence(tracks, masks, mask_thresh, db, index, output_dir, plot_masks 
     im = im[:, :, (2, 1, 0)]
 
     sizes = np.shape(im)
-    height = float(sizes[0])
+    height = float(sizes[0])    
     width = float(sizes[1])
 
     fig = plt.figure()
