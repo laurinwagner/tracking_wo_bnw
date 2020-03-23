@@ -1,3 +1,4 @@
+
 import os
 import time
 from os import path as osp
@@ -99,7 +100,12 @@ def main(tracktor, reid, _config, _log, _run):
         for i, frame in enumerate(tqdm(data_loader)):
             if len(seq) * tracktor['frame_split'][0] <= i <= len(seq) * tracktor['frame_split'][1]:
                 tracker.step(frame)
+                if tracktor['write_images'] and use_masks:
+                  result = tracker.get_results()
+                  masks = tracker.get_masks()
+                  plot_sequence(result, masks, seq, num_frames, osp.join(output_dir, tracktor['dataset'], str(seq)), plot_masks = True)
                 num_frames += 1
+
         results = tracker.get_results()
         import matplotlib.pyplot as plt
 
@@ -119,9 +125,6 @@ def main(tracktor, reid, _config, _log, _run):
         _log.info(f"Writing predictions to: {output_dir}")
         seq.write_results(results, output_dir)
 
-        if tracktor['write_images']:
-          if(use_masks): #as plot sequence plots masks
-            plot_sequence(results, seq, osp.join(output_dir, tracktor['dataset'], str(seq)))
 
     _log.info(f"Tracking runtime for all sequences (without evaluation or image writing): "
               f"{time_total:.1f} s ({num_frames / time_total:.1f} Hz)")

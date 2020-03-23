@@ -1,3 +1,4 @@
+%%writefile src/tracktor/tracker.py
 
 from collections import deque
 
@@ -21,7 +22,7 @@ class Tracker:
 
 	def __init__(self, fast_model, reid_network, tracker_cfg, mask_model = None):
 		self.fast_model = fast_model
-		self.mask_model = mask_model        
+		self.mask_model = mask_model
 		self.reid_network = reid_network
 		self.detection_person_thresh = tracker_cfg['detection_person_thresh']
 		self.regression_person_thresh = tracker_cfg['regression_person_thresh']
@@ -49,7 +50,10 @@ class Tracker:
 		self.box_size=[]
 		self.mask_comp=[]
 		self.score_diff=[]
-		self.mask_tracks=[] #new
+		self.masks = []
+
+	def get_masks(self):
+		return self.masks
 
 	def reset(self, hard=True):
 		self.tracks = []
@@ -98,8 +102,8 @@ class Tracker:
 			use_pos_mask=False
 			if(self.use_masks and scores[i]<mask_scores[i]):
 				if(scores[i]<0.5):
-					use_pos_mask=True  
-				scores[i]=mask_scores[i]      
+					use_pos_mask=True
+				scores[i]=mask_scores[i]
 			t = self.tracks[i]
 			t.score = scores[i]
 			if scores[i] <= self.regression_person_thresh:
@@ -147,7 +151,7 @@ class Tracker:
 	def reid(self, blob, new_det_pos, new_det_scores):
 		"""Tries to ReID inactive tracks with provided detections."""
 		new_det_features = [torch.zeros(0).cuda() for _ in range(len(new_det_pos))]
-		
+
 		if self.do_reid:
 			new_det_features = self.reid_network.test_rois(
 				blob['img'], new_det_pos).data
@@ -200,7 +204,7 @@ class Tracker:
 					new_det_pos = torch.zeros(0).cuda()
 					new_det_scores = torch.zeros(0).cuda()
 					new_det_features = torch.zeros(0).cuda()
-		
+
 		return new_det_pos, new_det_scores, new_det_features
 
 	def get_appearances(self, blob):
@@ -288,13 +292,13 @@ class Tracker:
 			if(sizes[1]<20000 and self.get_iou(mask_boxes[i],gt)<0.5):
 				self.mask_comp.append(mask_scores[i])
 
-			#randomly sampling boxes 
+			#randomly sampling boxes
 			#if(random.randint(i,20)==i):
 				#print('box added, boxsize, mask_box_size: ' + str([sizes[0],sizes[1]]))
 
 				#self.box_size.append((sizes[1]+sizes[0])/2)
 				#self.score_diff.append(mask_scores[i]-scores[i])
-   
+
 	def step(self, blob):
 		"""This function should be called every timestep to perform tracking with a blob
 		containing the image information.
@@ -316,6 +320,7 @@ class Tracker:
 				if(self.use_masks):
 				    mask_boxes, mask_scores, masks = self.mask_model.predict_boxes(blob['img'], dets)
 				    mask_box_sizes = [self.getSize(mask_box) for mask_box in mask_boxes]
+				    self.masks = masks
 				    self.printdetInfo(boxes,scores,mask_boxes,mask_scores,blob['gt'])
 			else:
 				boxes = scores = torch.zeros(0).cuda()
@@ -325,7 +330,7 @@ class Tracker:
 			boxes, scores = self.fast_model.detect(blob['img'])
 			if(self.use_masks):
 				  mask_boxes, mask_scores, masks = self.mask_model.predict_boxes(blob['img'], dets)
-				  mask_box_sizes = [self.getSize(mask_box) for mask_box in mask_boxes] 
+				  mask_box_sizes = [self.getSize(mask_box) for mask_box in mask_boxes]
 		if boxes.nelement() > 0:
 			boxes = clip_boxes_to_image(boxes, blob['img'].shape[-2:])
 			if(self.use_masks):
@@ -333,25 +338,8 @@ class Tracker:
 			# Filter out tracks that have too low person score
 			inds = torch.gt(scores, self.detection_person_thresh).nonzero().view(-1)
 			if(self.use_masks):
-					#box_inds = torch.gt(mask_scores, self.detection_person_thresh).nonzero().view(-1)
 					inds = torch.gt(torch.max(mask_scores, scores), self.detection_person_thresh).nonzero().view(-1)
-			#if(self.use_masks):
-				# #get all indexes where (mask score larger .5 faster score <.5 and boxes larger 25000) or (fasterscore>.5)
-				# device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-				# inds_np = torch.gt(scores, self.detection_person_thresh).cpu().numpy() #get indexes booelan where box socres >.5 and transform to numpy
-				# mask_inds_np = torch.gt(mask_scores, self.detection_person_thresh).cpu().numpy() #get indexes boolean where mask scores >.5
-				# box_inds=np.array(mask_box_sizes)>25000 #get indexes where boxes larger than thresh
-				# inds_np_inv=np.invert(inds_np) #get indexes where box thresh is not larger than .5
-				# indexes=np.logical_and(np.logical_and(inds_np_inv,mask_inds_np),box_inds) #get indexes where box thrsh is not larger than .5 and mask scores is lager than .5 and boxes are larger than box_thresh
-				# box_index=np.logical_or(indexes,inds_np) #box_index is all boxes with above conditions or standard
-				# box_index=torch.from_numpy(box_index).nonzero().view(-1).to(device) #convert box index back to torch
-				# scores_np=scores.cpu().numpy()
-				# mask_scores_np=mask_scores.cpu().numpy()
-				# scores=scores_np*inds_np+mask_scores_np*indexes #take scores larger than thresh from faster and additionally the scores from mask with box thresh etc.
-				# scores=scores[scores!=0]#erase the 0s from scores
-				# scores=torch.from_numpy(scores).to(device)
-	
-	 
+
 		else:
 			inds = torch.zeros(0).cuda()
 
@@ -445,7 +433,7 @@ class Tracker:
 
 			# try to reidentify tracks
 			new_det_pos, new_det_scores, new_det_features = self.reid(blob, new_det_pos, new_det_scores)
-			
+
 			# add new
 			if new_det_pos.nelement() > 0:
 				self.add(new_det_pos, new_det_scores, new_det_features)
@@ -453,7 +441,7 @@ class Tracker:
 		####################
 		# Generate Results #
 		####################
-		
+
 		for t in self.tracks:
 			if t.id not in self.results.keys():
 				self.results[t.id] = {}

@@ -85,7 +85,7 @@ def bbox_overlaps(boxes, query_boxes):
     return out_fn(overlaps)
 
 
-def plot_sequence(tracks, masks, mask_thresh, db, index, output_dir, alpha = 0.6, plot_masks = True):
+def plot_sequence(tracks, masks, db, index, output_dir, alpha = 0.6, mask_thresh = 0.5, plot_masks = True):
     """Plots a whole sequence
 
     Args:
@@ -98,9 +98,9 @@ def plot_sequence(tracks, masks, mask_thresh, db, index, output_dir, alpha = 0.6
         plot_masks: if we want to plot masks
     """
 
-    print("[*] Plotting whole sequence to {}".format(output_dir))
+    print("[*] Plotting image to {}".format(output_dir))
 
-    
+
 
     if not osp.exists(output_dir):
         os.makedirs(output_dir)
@@ -112,11 +112,11 @@ def plot_sequence(tracks, masks, mask_thresh, db, index, output_dir, alpha = 0.6
 
     #for i, v in enumerate(db):
     v = db[index]
-    im_path = v['im_path']
+    im_path = v['img_path']
     im_name = osp.basename(im_path)
     im_output = osp.join(output_dir, im_name)
     im = cv2.imread(im_path)
-    im = im[:, :, (2, 1, 0)]
+    #im = im[:, :, (2, 1, 0)]
     sizes = np.shape(im)
     height = int(sizes[0])
     width = int(sizes[1])
@@ -147,7 +147,7 @@ def plot_sequence(tracks, masks, mask_thresh, db, index, output_dir, alpha = 0.6
               tempmask[:,:,1] = mask.cpu().numpy()*color[1]
               tempmask[:,:,2] = mask.cpu().numpy()*color[2]
               finalmask += alpha*tempmask
-            
+
 
               #printmask = ma.masked_where(mask>0, mask)
               #plt.imshow(printmask, 'gray', interpolation='none')
@@ -158,11 +158,11 @@ def plot_sequence(tracks, masks, mask_thresh, db, index, output_dir, alpha = 0.6
     #cv2.addWeighted(finalmask, alpha, im, 1 - alpha, 0, im)
     #finalmask=np.where(finalmask!=(0,0,0),finalmask.astype(np.uint8),im.mul(255).permute(1, 2, 0).byte().numpy())
     masked_image = finalmask + im
-    cv2.imwrite('masks/mask' + str(im_name) + str(j) +'.jpg', masked_image)
+    cv2.imwrite(output_dir +'/'+ str(im_name), masked_image)
 
             #print('t_i: ' +str(t[index]))
             #print('styles[' + str(j) + ']' + str(styles[j]))
-            
+
             # ax.add_patch(
             #     plt.Rectangle(
             #         (t_i[0], t_i[1]),
@@ -177,17 +177,25 @@ def plot_sequence(tracks, masks, mask_thresh, db, index, output_dir, alpha = 0.6
 
     #plt.axis('off')
     # plt.tight_layout()
-    
 
-def iou(mask_box, box): #calculates iou over the boxes
+def iou(mask, box): #calculates iou over the box and an imaginary box around the mask
 
-  mask_box_area = (mask_box[2]-mask_box[0])*(mask_box[3]-mask_box[1])
+  indexmask=mask.nonzero()
+  maxindices = torch.max(indexmask, 0)[0]
+  minindices = torch.min(indexmask, 0)[0]
+
+  xmin = minindices[1].cpu().numpy()
+  xmax = maxindices[1].cpu().numpy()
+  ymin = minindices[0].cpu().numpy()
+  ymax = maxindices[0].cpu().numpy()
+
+  mask_box_area = (xmax-xmin)*(ymax-ymin)
   box_area = (box[2]-box[0])*(box[3]-box[1])
 
-  xx1 = max(box[0], mask_box[0])
-  yy1 = max(box[1], mask_box[1])
-  xx2 = min(box[2], mask_box[2])
-  yy2 = min(box[3], mask_box[3])
+  xx1 = max(box[0], xmin)
+  yy1 = max(box[1], ymin)
+  xx2 = min(box[2], xmax)
+  yy2 = min(box[3], ymax)
 
   w = np.maximum(0.0, xx2 - xx1)
   h = np.maximum(0.0, yy2 - yy1)
@@ -198,7 +206,7 @@ def iou(mask_box, box): #calculates iou over the boxes
   return ovr
 
 
-def contained(mask, box): #how much of the box is contained in the mask, needed for sorting dets out in ignore regions 
+def contained(mask, box): #how much of the box is contained in the mask, needed for sorting dets out in ignore regions
   h, w = mask.shape #image size
 
   #box size
@@ -207,7 +215,7 @@ def contained(mask, box): #how much of the box is contained in the mask, needed 
 
   box = box_to_mask(box,h,w)
   I = np.logical_and(mask == 1, box == 1).sum()
-  inside = I / (length*width) 
+  inside = I / (length*width)
   return inside
 
 
@@ -407,7 +415,7 @@ def warp_pos(pos, warp_matrix):
 
 
 def get_mot_accum(results, seq):
-    mot_accum = mm.MOTAccumulator(auto_id=True)    
+    mot_accum = mm.MOTAccumulator(auto_id=True)
 
     for i, data in enumerate(seq):
         gt = data['gt']
@@ -417,7 +425,7 @@ def get_mot_accum(results, seq):
             for gt_id, box in gt.items():
                 gt_ids.append(gt_id)
                 gt_boxes.append(box)
-        
+
             gt_boxes = np.stack(gt_boxes, axis=0)
             # x1, y1, x2, y2 --> x1, y1, width, height
             gt_boxes = np.stack((gt_boxes[:, 0],
@@ -427,7 +435,7 @@ def get_mot_accum(results, seq):
                                 axis=1)
         else:
             gt_boxes = np.array([])
-        
+
         track_ids = []
         track_boxes = []
         for track_id, frames in results.items():
@@ -446,9 +454,9 @@ def get_mot_accum(results, seq):
                                     axis=1)
         else:
             track_boxes = np.array([])
-        
+
         distance = mm.distances.iou_matrix(gt_boxes, track_boxes, max_iou=0.5)
-        
+
         mot_accum.update(
             gt_ids,
             track_ids,
@@ -456,18 +464,18 @@ def get_mot_accum(results, seq):
 
     return mot_accum
 
-    
+
 def evaluate_mot_accums(accums, names, generate_overall=False):
     mh = mm.metrics.create()
     summary = mh.compute_many(
-        accums, 
-        metrics=mm.metrics.motchallenge_metrics, 
+        accums,
+        metrics=mm.metrics.motchallenge_metrics,
         names=names,
         generate_overall=generate_overall,)
 
     str_summary = mm.io.render_summary(
-        summary, 
-        formatters=mh.formatters, 
+        summary,
+        formatters=mh.formatters,
         namemap=mm.io.motchallenge_metric_names,)
     print(str_summary)
 
