@@ -1,5 +1,7 @@
+
 from collections import deque
 
+import csv
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -7,7 +9,7 @@ from torch.autograd import Variable
 from scipy.optimize import linear_sum_assignment
 import cv2
 
-from .utils import bbox_overlaps, warp_pos, get_center, get_height, get_width, make_pos
+from .utils import bbox_overlaps, warp_pos, get_center, get_height, get_width, make_pos, iou
 
 from torchvision.ops.boxes import clip_boxes_to_image, nms
 
@@ -17,8 +19,9 @@ class Tracker:
 	# only track pedestrian
 	cl = 1
 
-	def __init__(self, obj_detect, reid_network, tracker_cfg):
-		self.obj_detect = obj_detect
+	def __init__(self, fast_model, reid_network, tracker_cfg, mask_model = None):
+		self.fast_model = fast_model
+		self.mask_model = mask_model        
 		self.reid_network = reid_network
 		self.detection_person_thresh = tracker_cfg['detection_person_thresh']
 		self.regression_person_thresh = tracker_cfg['regression_person_thresh']
@@ -32,17 +35,21 @@ class Tracker:
 		self.reid_iou_threshold = tracker_cfg['reid_iou_threshold']
 		self.do_align = tracker_cfg['do_align']
 		self.motion_model_cfg = tracker_cfg['motion_model']
-
 		self.warp_mode = eval(tracker_cfg['warp_mode'])
 		self.number_of_iterations = tracker_cfg['number_of_iterations']
 		self.termination_eps = tracker_cfg['termination_eps']
-
+		self.use_masks = tracker_cfg['use_masks']
+		self.mask_model = mask_model
 		self.tracks = []
 		self.inactive_tracks = []
-		self.masks = []
 		self.track_num = 0
 		self.im_index = 0
 		self.results = {}
+		self.box_comp=[]
+		self.box_size=[]
+		self.mask_comp=[]
+		self.score_diff=[]
+		self.mask_tracks=[] #new
 
 	def reset(self, hard=True):
 		self.tracks = []
@@ -75,16 +82,24 @@ class Tracker:
 		self.track_num += num_new
 
 	def regress_tracks(self, blob):
-		print('regress was called')
 		"""Regress the position of the tracks and also checks their scores."""
 		pos = self.get_pos()
 
 		# regress
-		boxes, scores, masks = self.obj_detect.predict_boxes(blob['img'], pos)
-		pos = clip_boxes_to_image(boxes, blob['img'].shape[-2:])
-		
+		boxes, scores = self.fast_model.predict_boxes(blob['img'], pos)
+		pos_fast = clip_boxes_to_image(boxes, blob['img'].shape[-2:])
+		box_sizes = [self.getSize(box) for box in boxes]
+		if(self.use_masks):
+			mask_boxes, mask_scores, masks = self.mask_model.predict_boxes(blob['img'], pos)
+			pos_mask = clip_boxes_to_image(mask_boxes, blob['img'].shape[-2:])
+			mask_box_sizes = [self.getSize(mask_box) for mask_box in mask_boxes]
 		s = []
 		for i in range(len(self.tracks) - 1, -1, -1):
+			use_pos_mask=False
+			if(self.use_masks and scores[i]<mask_scores[i]):
+				if(scores[i]<0.5):
+					use_pos_mask=True  
+				scores[i]=mask_scores[i]      
 			t = self.tracks[i]
 			t.score = scores[i]
 			if scores[i] <= self.regression_person_thresh:
@@ -92,7 +107,10 @@ class Tracker:
 			else:
 				s.append(scores[i])
 				# t.prev_pos = t.pos
-				t.pos = pos[i].view(1, -1)
+				if(use_pos_mask):
+					t.pos = pos_fast[i].view(1,-1)
+				else:
+					t.pos = pos_fast[i].view(1, -1)
 
 		return torch.Tensor(s[::-1]).cuda()
 
@@ -246,7 +264,37 @@ class Tracker:
 			for t in self.inactive_tracks:
 				if t.last_v.nelement() > 0:
 					self.motion_step(t)
+	def getSize(self,box):
+		l=box[2]-box[0]
+		w=box[3]-box[1]
+		return (l*w).cpu().numpy()
+	def get_iou(self,box,gt):
+		max_iou = 0
+		for key in gt:
+			#print(box.to([gt[key].device))
+			intersect = iou(box.cpu(),gt[key][0].cpu())
+			max_iou=max(max_iou,intersect)
+		return max_iou
+	def printdetInfo(self,boxes, scores, mask_boxes,mask_scores, gt):
+		import random
+		#print(gt)
+		mask_box_sizes = [self.getSize(mask_box) for mask_box in mask_boxes]
+		box_sizes = [self.getSize(box) for box in boxes]
+		scores, mask_scores = scores.cpu().numpy(), mask_scores.cpu().numpy()
+		for i,sizes in enumerate(zip(box_sizes,mask_box_sizes)):
+			#if(scores[i]>0.5 and mask_scores[i]<0.5 and self.get_iou(boxes[i],gt)>0.5 and sizes[0]>20000):
+			if(sizes[0]<20000 and self.get_iou(boxes[i],gt)<0.5):
+				self.box_comp.append(scores[i])
+			if(sizes[1]<20000 and self.get_iou(mask_boxes[i],gt)<0.5):
+				self.mask_comp.append(mask_scores[i])
 
+			#randomly sampling boxes 
+			#if(random.randint(i,20)==i):
+				#print('box added, boxsize, mask_box_size: ' + str([sizes[0],sizes[1]]))
+
+				#self.box_size.append((sizes[1]+sizes[0])/2)
+				#self.score_diff.append(mask_scores[i]-scores[i])
+   
 	def step(self, blob):
 		"""This function should be called every timestep to perform tracking with a blob
 		containing the image information.
@@ -263,28 +311,73 @@ class Tracker:
 		if self.public_detections:
 			dets = blob['dets'].squeeze(dim=0)
 			if dets.nelement() > 0:
-				boxes, scores, masks = self.obj_detect.predict_boxes(blob['img'], dets)
-				self.masks = masks
+				boxes, scores = self.fast_model.predict_boxes(blob['img'], dets)
+				box_sizes = [self.getSize(box) for box in boxes]
+				if(self.use_masks):
+				    mask_boxes, mask_scores, masks = self.mask_model.predict_boxes(blob['img'], dets)
+				    mask_box_sizes = [self.getSize(mask_box) for mask_box in mask_boxes]
+				    self.printdetInfo(boxes,scores,mask_boxes,mask_scores,blob['gt'])
 			else:
 				boxes = scores = torch.zeros(0).cuda()
+				if(self.use_masks):
+				    mask_boxes = mask_scores = masks = torch.zeros(0).cuda()
 		else:
-			boxes, scores = self.obj_detect.detect(blob['img'])
-
+			boxes, scores = self.fast_model.detect(blob['img'])
+			if(self.use_masks):
+				  mask_boxes, mask_scores, masks = self.mask_model.predict_boxes(blob['img'], dets)
+				  mask_box_sizes = [self.getSize(mask_box) for mask_box in mask_boxes] 
 		if boxes.nelement() > 0:
 			boxes = clip_boxes_to_image(boxes, blob['img'].shape[-2:])
-
+			if(self.use_masks):
+				mask_boxes=clip_boxes_to_image(mask_boxes, blob['img'].shape[-2:])
 			# Filter out tracks that have too low person score
 			inds = torch.gt(scores, self.detection_person_thresh).nonzero().view(-1)
+			if(self.use_masks):
+					#box_inds = torch.gt(mask_scores, self.detection_person_thresh).nonzero().view(-1)
+					inds = torch.gt(torch.max(mask_scores, scores), self.detection_person_thresh).nonzero().view(-1)
+			#if(self.use_masks):
+				# #get all indexes where (mask score larger .5 faster score <.5 and boxes larger 25000) or (fasterscore>.5)
+				# device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+				# inds_np = torch.gt(scores, self.detection_person_thresh).cpu().numpy() #get indexes booelan where box socres >.5 and transform to numpy
+				# mask_inds_np = torch.gt(mask_scores, self.detection_person_thresh).cpu().numpy() #get indexes boolean where mask scores >.5
+				# box_inds=np.array(mask_box_sizes)>25000 #get indexes where boxes larger than thresh
+				# inds_np_inv=np.invert(inds_np) #get indexes where box thresh is not larger than .5
+				# indexes=np.logical_and(np.logical_and(inds_np_inv,mask_inds_np),box_inds) #get indexes where box thrsh is not larger than .5 and mask scores is lager than .5 and boxes are larger than box_thresh
+				# box_index=np.logical_or(indexes,inds_np) #box_index is all boxes with above conditions or standard
+				# box_index=torch.from_numpy(box_index).nonzero().view(-1).to(device) #convert box index back to torch
+				# scores_np=scores.cpu().numpy()
+				# mask_scores_np=mask_scores.cpu().numpy()
+				# scores=scores_np*inds_np+mask_scores_np*indexes #take scores larger than thresh from faster and additionally the scores from mask with box thresh etc.
+				# scores=scores[scores!=0]#erase the 0s from scores
+				# scores=torch.from_numpy(scores).to(device)
+	
+	 
 		else:
 			inds = torch.zeros(0).cuda()
 
-		if inds.nelement() > 0:
-			det_pos = boxes[inds]
+		if inds.nelement()>0:
+				det_pos = torch.empty_like(boxes[inds])
+				det_scores=torch.empty_like(scores[inds])
+				if(self.use_masks):
+					for i in range(len(inds)):
+			 			if(scores[inds[i]]>mask_scores[inds[i]]):
+			 				det_scores[i]=scores[inds[i]]
+			 				det_pos[i] = boxes[inds[i]]
+			 			else:
+			 				det_scores[i]=mask_scores[inds[i]]
+			 				det_pos[i] = boxes[inds[i]]
 
-			det_scores = scores[inds]
+				else:
+					det_scores = scores[inds]
+					det_pos=boxes[inds]
+
 		else:
 			det_pos = torch.zeros(0).cuda()
 			det_scores = torch.zeros(0).cuda()
+
+
+#predict new boxes of dets in step => threshold with detection_pers_thresh = 0,5 => align or motion model (on current tracks)
+# => regress already found tracks => nms of regressed (own) detections and predictions from dets
 
 		##################
 		# Predict tracks #
@@ -378,9 +471,8 @@ class Tracker:
 
 	def get_results(self):
 		return self.results
-	
-	def get_masks(self):
-		return self.masks
+	def get_statistic(self):
+		return self.box_comp, self.mask_comp, self.box_size, self.score_diff
 
 
 class Track(object):
@@ -397,6 +489,7 @@ class Track(object):
 		self.max_features_num = max_features_num
 		self.last_pos = deque([pos.clone()], maxlen=mm_steps + 1)
 		self.last_v = torch.Tensor([])
+		#self.mask_pos=mask_pos
 		self.gt_id = None
 
 	def has_positive_area(self):

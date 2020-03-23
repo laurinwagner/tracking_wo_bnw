@@ -1,10 +1,10 @@
 import torch
 from torch.utils.data import Dataset
 
-from .mot_sequence import MOT17_Sequence, MOT19CVPR_Sequence, MOT17LOWFPS_Sequence
+from .mot_sequence import MOT17Sequence, MOT19CVPRSequence, MOT17LOWFPSSequence
 
 
-class MOT17_Wrapper(Dataset):
+class MOT17Wrapper(Dataset):
 	"""A Wrapper for the MOT_Sequence class to return multiple sequences."""
 
 	def __init__(self, split, dets, dataloader):
@@ -14,7 +14,7 @@ class MOT17_Wrapper(Dataset):
 		split -- the split of the dataset to use
 		dataloader -- args for the MOT_Sequence dataloader
 		"""
-		train_sequences = ['MOT17-02', 'MOT17-04', 'MOT17-05', 'MOT17-09', 'MOT17-10', 'MOT17-11', 'MOT17-13']
+		train_sequences =[]#'MOT17-05','MOT17-02', 'MOT17-04', 'MOT17-05', 'MOT17-09', 'MOT17-10', 'MOT17-11', 'MOT17-13']
 		test_sequences = ['MOT17-01', 'MOT17-03', 'MOT17-06', 'MOT17-07', 'MOT17-08', 'MOT17-12', 'MOT17-14']
 
 		if "train" == split:
@@ -31,11 +31,11 @@ class MOT17_Wrapper(Dataset):
 		self._data = []
 		for s in sequences:
 			if dets == '17':
-				self._data.append(MOT17_Sequence(seq_name=s, dets='DPM17', **dataloader))
-				self._data.append(MOT17_Sequence(seq_name=s, dets='FRCNN17', **dataloader))
-				self._data.append(MOT17_Sequence(seq_name=s, dets='SDP17', **dataloader))
+				self._data.append(MOT17Sequence(seq_name=s, dets='DPM17', **dataloader))
+				self._data.append(MOT17Sequence(seq_name=s, dets='FRCNN17', **dataloader))
+				self._data.append(MOT17Sequence(seq_name=s, dets='SDP17', **dataloader))
 			else:
-				self._data.append(MOT17_Sequence(seq_name=s, dets=dets, **dataloader))
+				self._data.append(MOT17Sequence(seq_name=s, dets=dets, **dataloader))
 
 	def __len__(self):
 		return len(self._data)
@@ -44,7 +44,7 @@ class MOT17_Wrapper(Dataset):
 		return self._data[idx]
 
 
-class MOT19CVPR_Wrapper(MOT17_Wrapper):
+class MOT19Wrapper(MOT17Wrapper):
 	"""A Wrapper for the MOT_Sequence class to return multiple sequences."""
 
 	def __init__(self, split, dataloader):
@@ -79,7 +79,7 @@ class MOT19CVPR_Wrapper(MOT17_Wrapper):
 		return self._data[idx]
 
 
-class MOT17LOWFPS_Wrapper(MOT17_Wrapper):
+class MOT17LOWFPSWrapper(MOT17Wrapper):
 	"""A Wrapper for the MOT_Sequence class to return multiple sequences."""
 
 	def __init__(self, split, dataloader):

@@ -15,14 +15,13 @@ from tqdm import tqdm
 import sacred
 from sacred import Experiment
 from tracktor.frcnn_fpn import FRCNN_FPN
+from tracktor.mask_rcnn import Mask_RCNN
 from tracktor.config import get_output_dir
 from tracktor.datasets.factory import Datasets
 from tracktor.oracle_tracker import OracleTracker
 from tracktor.tracker import Tracker
 from tracktor.reid.resnet import resnet50
 from tracktor.utils import interpolate, plot_sequence, get_mot_accum, evaluate_mot_accums
-from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
-from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 
 ex = Experiment()
 
@@ -57,29 +56,20 @@ def main(tracktor, reid, _config, _log, _run):
 
     # object detection
     _log.info("Initializing object detector.")
-
-    #obj_detect = FRCNN_FPN(num_classes=2)
-    num_classes = 2
-    obj_detect = torchvision.models.detection.maskrcnn_resnet50_fpn(pretrained=True)
-
-    # get the number of input features for the classifier
-    in_features = obj_detect.roi_heads.box_predictor.cls_score.in_features
-    # replace the pre-trained head with a new one
-    obj_detect.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
-
-    # now get the number of input features for the mask classifier
-    in_features_mask = obj_detect.roi_heads.mask_predictor.conv5_mask.in_channels
-    hidden_layer = 256
-    # and replace the mask predictor with a new one
-    obj_detect.roi_heads.mask_predictor = MaskRCNNPredictor(in_features_mask,
-                                                       hidden_layer,
-                                                       num_classes)
-
-    obj_detect.load_state_dict(torch.load(_config['tracktor']['obj_detect_model'],
+    use_masks = _config['tracktor']['tracker']['use_masks']
+    mask_model = Mask_RCNN(num_classes=2)
+    fast_model = FRCNN_FPN(num_classes=2)
+    fast_model.load_state_dict(torch.load(_config['tracktor']['fast_rcnn_model'],
                                map_location=lambda storage, loc: storage))
+    if(use_masks):
 
-    obj_detect.eval()
-    obj_detect.cuda()
+      mask_model.load_state_dict(torch.load(_config['tracktor']['mask_rcnn_model'],
+                               map_location=lambda storage, loc: storage)['model_state_dict'])
+      mask_model.eval()
+      mask_model.cuda()
+
+    fast_model.eval()
+    fast_model.cuda()
 
     # reid
     reid_network = resnet50(pretrained=False, **reid['cnn'])
@@ -90,9 +80,9 @@ def main(tracktor, reid, _config, _log, _run):
 
     # tracktor
     if 'oracle' in tracktor:
-        tracker = OracleTracker(obj_detect, reid_network, tracktor['tracker'], tracktor['oracle'])
+        tracker = OracleTracker(fast_model, reid_network, tracktor['tracker'], tracktor['oracle'])
     else:
-        tracker = Tracker(obj_detect, reid_network, tracktor['tracker'])
+        tracker = Tracker(fast_model, reid_network, tracktor['tracker'], mask_model)
 
     time_total = 0
     num_frames = 0
@@ -111,6 +101,7 @@ def main(tracktor, reid, _config, _log, _run):
                 tracker.step(frame)
                 num_frames += 1
         results = tracker.get_results()
+        import matplotlib.pyplot as plt
 
         time_total += time.time() - start
 
@@ -129,6 +120,7 @@ def main(tracktor, reid, _config, _log, _run):
         seq.write_results(results, output_dir)
 
         if tracktor['write_images']:
+          if(use_masks): #as plot sequence plots masks
             plot_sequence(results, seq, osp.join(output_dir, tracktor['dataset'], str(seq)))
 
     _log.info(f"Tracking runtime for all sequences (without evaluation or image writing): "

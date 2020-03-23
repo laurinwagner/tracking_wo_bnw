@@ -14,7 +14,7 @@ from ..config import cfg
 from torchvision.transforms import ToTensor
 
 
-class MOT17_Sequence(Dataset):
+class MOT17Sequence(Dataset):
     """Multiple Object Tracking Dataset.
 
     This dataloader is designed so that it can handle only one sequence, if more have to be
@@ -124,7 +124,6 @@ class MOT17_Sequence(Dataset):
             no_gt = True
 
         det_file = self.get_det_file(label_path, raw_label_path, mot17_label_path)
-
         if osp.exists(det_file):
             with open(det_file, "r") as inf:
                 reader = csv.reader(inf, delimiter=',')
@@ -216,7 +215,7 @@ class MOT17_Sequence(Dataset):
                     writer.writerow([frame+1, i+1, x1+1, y1+1, x2-x1+1, y2-y1+1, -1, -1, -1, -1])
 
 
-class MOT19CVPR_Sequence(MOT17_Sequence):
+class MOT19CVPRSequence(MOT17Sequence):
 
     def __init__(self, seq_name=None, dets='', vis_threshold=0.0,
                  normalize_mean=[0.485, 0.456, 0.406],
@@ -281,7 +280,7 @@ class MOT19CVPR_Sequence(MOT17_Sequence):
                         [frame + 1, i + 1, x1 + 1, y1 + 1, x2 - x1 + 1, y2 - y1 + 1, -1, -1, -1, -1])
 
 
-class MOT17LOWFPS_Sequence(MOT17_Sequence):
+class MOT17LOWFPSSequence(MOT17Sequence):
 
     def __init__(self, split, seq_name=None, dets='', vis_threshold=0.0,
                  normalize_mean=[0.485, 0.456, 0.406],

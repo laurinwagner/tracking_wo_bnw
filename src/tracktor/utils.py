@@ -7,6 +7,7 @@ from collections import defaultdict
 from os import path as osp
 
 import numpy as np
+import numpy.ma as ma
 import torch
 from cycler import cycler as cy
 
@@ -15,7 +16,10 @@ import matplotlib
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 import motmetrics as mm
-
+from torchvision import transforms as t
+from PIL import Image
+import cv2 as cv
+import random
 matplotlib.use('Agg')
 
 # https://matplotlib.org/cycler/
@@ -49,8 +53,9 @@ colors = [
     'tomato', 'turquoise', 'violet', 'wheat', 'white', 'whitesmoke', 'yellow', 'yellowgreen'
 ]
 
+colors = [[0,0,255],[25,100,225],[50,75,175],[175,25,150],[100,50,125],[125,50,100],[150,75,50],[175,75,25],[225,100,150],[225,50,50],[225,100,0]]
 
-# From frcnn/utils/bbox.py
+
 def bbox_overlaps(boxes, query_boxes):
     """
     Parameters
@@ -80,16 +85,22 @@ def bbox_overlaps(boxes, query_boxes):
     return out_fn(overlaps)
 
 
-def plot_sequence(tracks, masks, mask_thresh, db, index, output_dir, plot_masks = True):
+def plot_sequence(tracks, masks, mask_thresh, db, index, output_dir, alpha = 0.6, plot_masks = True):
     """Plots a whole sequence
 
     Args:
         tracks (dict): The dictionary containing the track dictionaries in the form tracks[track_id][frame] = bb
         db (torch.utils.data.Dataset): The dataset with the images belonging to the tracks (e.g. MOT_Sequence object)
         output_dir (String): Directory where to save the resulting images
+        masks: Masks of the current frame
+        mask_thresh: the treshold if we print a pixel or not
+        index: index of the current frame
+        plot_masks: if we want to plot masks
     """
 
     print("[*] Plotting whole sequence to {}".format(output_dir))
+
+    
 
     if not osp.exists(output_dir):
         os.makedirs(output_dir)
@@ -101,47 +112,113 @@ def plot_sequence(tracks, masks, mask_thresh, db, index, output_dir, plot_masks 
 
     #for i, v in enumerate(db):
     v = db[index]
-    im_path = v['img_path']
+    im_path = v['im_path']
     im_name = osp.basename(im_path)
     im_output = osp.join(output_dir, im_name)
     im = cv2.imread(im_path)
     im = im[:, :, (2, 1, 0)]
-
     sizes = np.shape(im)
-    height = float(sizes[0])    
-    width = float(sizes[1])
+    height = int(sizes[0])
+    width = int(sizes[1])
 
     fig = plt.figure()
-    fig.set_size_inches(width / 100, height / 100)
-    ax = plt.Axes(fig, [0., 0., 1., 1.])
-    ax.set_axis_off()
-    fig.add_axes(ax)
-    ax.imshow(im)
+    # fig.set_size_inches(width / 100, height / 100)
+    # ax = plt.Axes(fig, [0., 0., 1., 1.])
+    #ax.set_axis_off()
+    # fig.add_axes(ax)
+    # ax.imshow(im)
+    zero_mask= torch.zeros_like(masks[0])
+    one_mask = torch.ones_like(masks[0])
+    for i,mask in enumerate(masks):
+      masks[i]=torch.where(mask>mask_thresh, one_mask, zero_mask)
+     # mask = mask>mask_thresh
 
-    for j, t in tracks.items(): #[track_id][frame]
-        print('t:' + str(t))
-        print('t.keys: ' + str(t.keys))
+    finalmask = np.zeros([height,width,3])
+
+    for j, t in tracks.items(): #[track_id][frame] loop over tracks and checks if the track is present in an image (index specifys which image)
         if index in t.keys():
-            print('t_i: ' +str(t[index]))
-            print('styles[' + str(j) + ']' + str(styles[j]))
-            t_i = t[index]
-            ax.add_patch(
-                plt.Rectangle(
-                    (t_i[0], t_i[1]),
-                    t_i[2] - t_i[0],
-                    t_i[3] - t_i[1],
-                    fill=False,
-                    linewidth=1.0, **styles[j]
-                ))
+          t_i = t[index]
+          color = styles[j]['ec']
 
-            ax.annotate(j, (t_i[0] + (t_i[2] - t_i[0]) / 2.0, t_i[1] + (t_i[3] - t_i[1]) / 2.0),
-                        color=styles[j]['ec'], weight='bold', fontsize=6, ha='center', va='center')
+          for mask in masks:
+            if(iou(mask[0], t_i))>0.8:
+              tempmask = np.zeros([height,width,3])
+              tempmask[:,:,0] = mask.cpu().numpy()*color[0]
+              tempmask[:,:,1] = mask.cpu().numpy()*color[1]
+              tempmask[:,:,2] = mask.cpu().numpy()*color[2]
+              finalmask += alpha*tempmask
+            
 
-    plt.axis('off')
+              #printmask = ma.masked_where(mask>0, mask)
+              #plt.imshow(printmask, 'gray', interpolation='none')
+              #plt.draw()
+              #plt.savefig(im_output, dpi=100)
+              #plt.close()
+              break
+    #cv2.addWeighted(finalmask, alpha, im, 1 - alpha, 0, im)
+    #finalmask=np.where(finalmask!=(0,0,0),finalmask.astype(np.uint8),im.mul(255).permute(1, 2, 0).byte().numpy())
+    masked_image = finalmask + im
+    cv2.imwrite('masks/mask' + str(im_name) + str(j) +'.jpg', masked_image)
+
+            #print('t_i: ' +str(t[index]))
+            #print('styles[' + str(j) + ']' + str(styles[j]))
+            
+            # ax.add_patch(
+            #     plt.Rectangle(
+            #         (t_i[0], t_i[1]),
+            #         t_i[2] - t_i[0],
+            #         t_i[3] - t_i[1],
+            #         fill=False,
+            #         linewidth=1.0, **styles[j]
+            #     ))
+
+            # ax.annotate(j, (t_i[0] + (t_i[2] - t_i[0]) / 2.0, t_i[1] + (t_i[3] - t_i[1]) / 2.0),
+            #             color=styles[j]['ec'], weight='bold', fontsize=6, ha='center', va='center')
+
+    #plt.axis('off')
     # plt.tight_layout()
-    plt.draw()
-    plt.savefig(im_output, dpi=100)
-    plt.close()
+    
+
+def iou(mask_box, box): #calculates iou over the boxes
+
+  mask_box_area = (mask_box[2]-mask_box[0])*(mask_box[3]-mask_box[1])
+  box_area = (box[2]-box[0])*(box[3]-box[1])
+
+  xx1 = max(box[0], mask_box[0])
+  yy1 = max(box[1], mask_box[1])
+  xx2 = min(box[2], mask_box[2])
+  yy2 = min(box[3], mask_box[3])
+
+  w = np.maximum(0.0, xx2 - xx1)
+  h = np.maximum(0.0, yy2 - yy1)
+
+  inter = w * h
+  ovr = inter / (mask_box_area + box_area - inter)
+
+  return ovr
+
+
+def contained(mask, box): #how much of the box is contained in the mask, needed for sorting dets out in ignore regions 
+  h, w = mask.shape #image size
+
+  #box size
+  length = box[2]-box[0]
+  width = box[3]-box[1]
+
+  box = box_to_mask(box,h,w)
+  I = np.logical_and(mask == 1, box == 1).sum()
+  inside = I / (length*width) 
+  return inside
+
+
+def box_to_mask(box,h,w):
+  x1 = int(round(box[0]))
+  x2 = int(round(box[2]))
+  y1 = int(round(box[1]))
+  y2 = int(round(box[3]))
+  box_mask = np.zeros((h,w))
+  box_mask[y1:y2,x1:x2] = 1
+  return box_mask
 
 
 def plot_tracks(blobs, tracks, gt_tracks=None, output_dir=None, name=None):
