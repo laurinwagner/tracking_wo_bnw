@@ -122,16 +122,10 @@ def plot_sequence(tracks, masks, db, index, output_dir, alpha = 0.6, mask_thresh
     width = int(sizes[1])
 
     fig = plt.figure()
-    # fig.set_size_inches(width / 100, height / 100)
-    # ax = plt.Axes(fig, [0., 0., 1., 1.])
-    #ax.set_axis_off()
-    # fig.add_axes(ax)
-    # ax.imshow(im)
     zero_mask= torch.zeros_like(masks[0])
     one_mask = torch.ones_like(masks[0])
     for i,mask in enumerate(masks):
       masks[i]=torch.where(mask>mask_thresh, one_mask, zero_mask)
-     # mask = mask>mask_thresh
 
     finalmask = np.zeros([height,width,3])
 
@@ -148,20 +142,10 @@ def plot_sequence(tracks, masks, db, index, output_dir, alpha = 0.6, mask_thresh
               tempmask[:,:,2] = mask.cpu().numpy()*color[2]
               finalmask += alpha*tempmask
 
-
-              #printmask = ma.masked_where(mask>0, mask)
-              #plt.imshow(printmask, 'gray', interpolation='none')
-              #plt.draw()
-              #plt.savefig(im_output, dpi=100)
-              #plt.close()
               break
-    #cv2.addWeighted(finalmask, alpha, im, 1 - alpha, 0, im)
-    #finalmask=np.where(finalmask!=(0,0,0),finalmask.astype(np.uint8),im.mul(255).permute(1, 2, 0).byte().numpy())
+
     masked_image = finalmask + im
     cv2.imwrite(output_dir +'/'+ str(im_name), masked_image)
-
-            #print('t_i: ' +str(t[index]))
-            #print('styles[' + str(j) + ']' + str(styles[j]))
 
             # ax.add_patch(
             #     plt.Rectangle(
