@@ -12,8 +12,8 @@ tracktor:
   # obj_detect_config: output/frcnn/res101/mot_2017_train/180k/sacred_config.yaml
 
   # fpn
-  fast_rcnn_model: output/faster_rcnn_fpn_training_mot_17/model_epoch_27.model
-  mask_rcnn_model: 'output/all_scenes_ep: 24.pkl'
+  fast_rcnn_model: output/faster_rcnn_fpn_training_mot_17/faster.model
+  mask_rcnn_model: output/mask_model.pkl
   # obj_detect_config: output/fpn/res101/mot_2017_train/voc_init_iccv19/config.yaml
   # obj_detect_weights: output/fpn/res101/mot19_cvpr_train/v1/fpn_1_3.pth
   # obj_detect_config: output/fpn/res101/mot19_cvpr_train/v1/config.yaml
