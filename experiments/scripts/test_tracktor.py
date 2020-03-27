@@ -90,6 +90,7 @@ def main(tracktor, reid, _config, _log, _run):
     mot_accums = []
     dataset = Datasets(tracktor['dataset'])
     for seq in dataset:
+        num_frames = 0
         tracker.reset()
 
         start = time.time()

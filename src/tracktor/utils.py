@@ -133,16 +133,20 @@ def plot_sequence(tracks, masks, db, index, output_dir, alpha = 0.6, mask_thresh
         if index in t.keys():
           t_i = t[index]
           color = styles[j]['ec']
-
+          maxiou=0
+          tempmask = np.zeros([height,width,3])
           for mask in masks:
-            if(iou(mask[0], t_i))>0.5:
-              tempmask = np.zeros([height,width,3])
+              temp_iou = iou(mask[0], t_i)
+            if temp_iou>maxiou:
               tempmask[:,:,0] = mask.cpu().numpy()*color[0]
               tempmask[:,:,1] = mask.cpu().numpy()*color[1]
               tempmask[:,:,2] = mask.cpu().numpy()*color[2]
-              finalmask += alpha*tempmask
+              maxiou=temp_iou
 
-              break
+          if(maxiou>0.3):
+            finalmask += alpha*tempmask
+
+
 
     masked_image = finalmask + im
     cv2.imwrite(output_dir +'/'+ str(im_name), masked_image)
