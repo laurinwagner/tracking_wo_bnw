@@ -97,11 +97,6 @@ def plot_sequence(tracks, masks, db, index, output_dir, alpha = 0.6, mask_thresh
         index: index of the current frame
         plot_masks: if we want to plot masks
     """
-
-    print("[*] Plotting image to {}".format(output_dir))
-
-
-
     if not osp.exists(output_dir):
         os.makedirs(output_dir)
 
@@ -137,11 +132,11 @@ def plot_sequence(tracks, masks, db, index, output_dir, alpha = 0.6, mask_thresh
           tempmask = np.zeros([height,width,3])
           for mask in masks:
               temp_iou = iou(mask[0], t_i)
-            if temp_iou>maxiou:
-              tempmask[:,:,0] = mask.cpu().numpy()*color[0]
-              tempmask[:,:,1] = mask.cpu().numpy()*color[1]
-              tempmask[:,:,2] = mask.cpu().numpy()*color[2]
-              maxiou=temp_iou
+              if temp_iou>maxiou:
+                tempmask[:,:,0] = mask.cpu().numpy()*color[0]
+                tempmask[:,:,1] = mask.cpu().numpy()*color[1]
+                tempmask[:,:,2] = mask.cpu().numpy()*color[2]
+                maxiou=temp_iou
 
           if(maxiou>0.3):
             finalmask += alpha*tempmask

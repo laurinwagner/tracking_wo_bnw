@@ -98,6 +98,10 @@ def main(tracktor, reid, _config, _log, _run):
         _log.info(f"Tracking: {seq}")
 
         data_loader = DataLoader(seq, batch_size=1, shuffle=False)
+        if tracktor['write_images'] and use_masks:
+            print("[*] Plotting image to {}".format(osp.join(output_dir, tracktor['dataset']))
+
+
         for i, frame in enumerate(tqdm(data_loader)):
             if len(seq) * tracktor['frame_split'][0] <= i <= len(seq) * tracktor['frame_split'][1]:
                 tracker.step(frame)
