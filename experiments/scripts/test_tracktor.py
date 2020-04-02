@@ -99,7 +99,7 @@ def main(tracktor, reid, _config, _log, _run):
 
         data_loader = DataLoader(seq, batch_size=1, shuffle=False)
         if tracktor['write_images'] and use_masks:
-            print("[*] Plotting image to {}".format(osp.join(output_dir, tracktor['dataset']))
+            print("[*] Plotting image to {}".format(osp.join(output_dir, tracktor['dataset'])))
 
 
         for i, frame in enumerate(tqdm(data_loader)):
